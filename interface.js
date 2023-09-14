@@ -23,13 +23,19 @@ const pool = new Pool({
 });
 
 (async() =>{
-    
+
+    const paramsObj = {
+        timeSecond: 70300,
+        startDate: "'2023-05-01'",
+        endDate: "'2023-06-01'",
+        dataTableName: data_table_name
+    };
     
 
     const client = await pool.connect();
     // console.log("client on");
     try{  
-        const kpiId = toParams("total_work_time_per_machine") ;
+        const kpiId = toParams("power_cost_per_hour") ;
         const kpiRows = await client.query(kpiColumQuery(kpiId, kpi_table_name));
         // console.log(kpiColumQuery(kpiId, kpi_table_name));
          //console.log(kpiRows);
@@ -37,17 +43,30 @@ const pool = new Pool({
         //check for children to understand if it's Primary KPI or Secondary KPI
         if(kpiRows.rows[0]['children'] ===  null){
             //kpiRow[0].children = null => kpiRow[0].query => !null
-            const paramsObj = {
-                startDate: "'2023-05-01'",
-                endDate: "'2023-06-01'",
-                dataTableName: data_table_name
-            };
+
 
             const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
             console.log(kpiRows.rows[0]['id'] +": "+retRow.rows[0]['v']);
         }else{
-
-        }
+            //children is !null => query = null
+            //console.log(kpiRows.rows[0]['children']);
+            var  childArray = [];
+            for(var child of kpiRows.rows[0]['children']){
+               // console.log(child);
+                const childRetRow = await client.query(kpiColumQuery(toParams(child),kpi_table_name));
+                //console.log(replaceWithValue(childRetRow.rows[0]['query'], paramsObj));
+                var value ={
+                    id: child,
+                    valueRow : (await client.query(replaceWithValue(childRetRow.rows[0]['query'], paramsObj))).rows[0]['v']
+                };
+                childArray.push(value);
+            }
+            console.log(childArray);
+            // the interface need to read which are the children, so it can ask for 
+            //the value to use in the function aqcuired by read function
+            //colum from kpi table 
+            
+        }   
     }catch(e){
         //print error code and detail
         console.error('Error:', e);
@@ -85,4 +104,9 @@ function toParams(str){
 //write the query to search into kpi table
 function kpiColumQuery (kpi_id, table_name){ 
     return ('select id,query,children,function from '+table_name +" where id ="+ kpi_id);
+}
+
+//convert hours into seconds, the time unit measured from Iot device
+function hoursToSecond(hours){
+    return hours*60*60;
 }
