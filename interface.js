@@ -1,7 +1,7 @@
 process.on('uncaughtException', function (err) {
     console.log(err);
 });
-//prende i parametri del database del .env
+//read connection parameters from .env file
 const path = require('path')
 require('dotenv').config({
     override: true,
@@ -13,6 +13,7 @@ const {Client,Pool} = require ('pg');
 const kpi_table_name = process.env.KPI_TABLE_NAME;
 const data_table_name = process.env.DATA_TABLE_NAME;
 
+//create a pool with .env param
 const pool = new Pool({
     user: process.env.USER,
     host: process.env.HOST,
@@ -22,51 +23,66 @@ const pool = new Pool({
 });
 
 (async() =>{
+    
+    
+
     const client = await pool.connect();
-    try{    
-       const {rows} = await client.query(kpiColumQuery("'most_used_machine_id'", kpi_table_name, '*'));
-       if(rows[0].children === null){
-        console.log("Query prima: ", rows[0].query);
-        const paramsObj = {
-            startDate: "'2023-05-01'",
-            endDate: "'2023-06-01'",
-            dataTableName: data_table_name
-        };
-        console.log("Query dopo: ", replaceWithValue(rows[0].query,paramsObj));
-        const ret = await client.query(replaceWithValue(rows[0].query,paramsObj));
-        console.log("ID DELLA MACCHINA= ", ret.rows[0].id);
-       }
-       
-      
+    // console.log("client on");
+    try{  
+        const kpiId = toParams("total_work_time_per_machine") ;
+        const kpiRows = await client.query(kpiColumQuery(kpiId, kpi_table_name));
+        // console.log(kpiColumQuery(kpiId, kpi_table_name));
+         //console.log(kpiRows);
+
+        //check for children to understand if it's Primary KPI or Secondary KPI
+        if(kpiRows.rows[0]['children'] ===  null){
+            //kpiRow[0].children = null => kpiRow[0].query => !null
+            const paramsObj = {
+                startDate: "'2023-05-01'",
+                endDate: "'2023-06-01'",
+                dataTableName: data_table_name
+            };
+
+            const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
+            console.log(kpiRows.rows[0]['id'] +": "+retRow.rows[0]['v']);
+        }else{
+
+        }
     }catch(e){
+        //print error code and detail
         console.error('Error:', e);
     }finally{
+        //in each case release client
         client.release();
     }
 
 })();
 
-
+//insert into query read from measured data database value into dollar regex
 function replaceWithValue(inputString, params){
-      // Utilizza una regex per cercare tutte le corrispondenze nel formato ${paramName}
-  const regex = /\${(.*?)}/g;
+    // Use a regex to search for all matches in the format ${paramName}
+    const regex = /\${(.*?)}/g;
 
-  // Usa il metodo replace() per sostituire ogni corrispondenza con il valore corrispondente
-  const outputString = inputString.replace(regex, (match, paramName) => {
-    // Verifica se il parametro esiste nell'oggetto params
+    // Use the replace() method to replace each match with the corresponding value
+    const outputString = inputString.replace(regex, (match, paramName) => {
+    // Checks whether the parameter exists in the params object
     if (params.hasOwnProperty(paramName)) {
-      // Restituisci il valore corrispondente al parametro
-      return params[paramName];
+        //Return the value corresponding to parameter
+        return params[paramName];
     } else {
-      // Se il parametro non esiste, mantieni la corrispondenza originale
-      return match;
-    }});
+        // If the parameter does not exist, keep the original match
+        return match;
+}});
 
-    return outputString;
+return outputString;
 }
 
+//trasform string into query params
+function toParams(str){
+    return ("'"+str+"'"); 
+}
 
-function kpiColumQuery (kpi_id, table_name, colum){
-    
-    return ('select '+colum+' from '+table_name +" where id = "+ kpi_id);
+//write the query to search into kpi table
+function kpiColumQuery (kpi_id, table_name){ 
+    return ('select id,query,children,function from '+table_name +" where id ="+ kpi_id);
 }
