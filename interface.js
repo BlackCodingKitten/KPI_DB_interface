@@ -24,13 +24,19 @@ const pool = new Pool({
 });
 
 (async() =>{
+    //dati che avdranno poi passati da input: 
+    let timeSecond = 69999;
+    let startDate = '2023-06-01';
+    let endDate = '2023-07-01';
+    let flag = true;
 
+    //param passed to interface function
     const paramsObj = {
-        timeSecond: 70300,
-        startDatePast: dateCalculator('2023-06-01',['2023-06-01','2023-07-01']),
-        endDatePast:   "'2023-06-01'",
-        startDate: "'2023-06-01'",
-        endDate: "'2023-07-01'",
+        timeSecond: timeSecond,
+        startDatePast: dateCalculator(startDate, [startDate,endDate], flag),
+        endDatePast:   toParams(startDate),
+        startDate: toParams(startDate),
+        endDate: toParams(endDate),
         dataTableName: data_table_name
     };
     
@@ -110,25 +116,29 @@ function kpiColumQuery (kpi_id, table_name){
 }
 
 //set the date to past 5 cycle period measuring difference with previuous period
-function dateCalculator(date, [strD, endD]){
+function dateCalculator(date, [strD, endD], flag){
     const s = new Date(strD);
     const e = new Date(endD);
     //day subtraction is measured by milliseconds
     const period = Math.ceil(Math.abs(e-s)/ (1000*60*60*24)); 
     
     var pastDate = new Date (date);
-
-    if(period >= 10){
-        //user selected period is more than 10 days, period cycle past report is month
-        //console.log("More than 10 days");
-        //past 5 period evaluation 
-        pastDate.setMonth(pastDate.getMonth() - 5);
+    if(!flag){
+        //last period
+        pastDate.setDate(pastDate.getDate()-period);
     }else{
-        //user selected period is less then 10 days, period cycle past report is week
-        //console.log("Less than 10 days");
-        pastDate.setDate(pastDate.getDate() - 35);
+        //five past period
+        if(period >= 10){
+            //user selected period is more than 10 days, period cycle past report is month
+            //console.log("More than 10 days");
+            //past 5 period evaluation 
+            pastDate.setMonth(pastDate.getMonth() - 5);
+        }else{
+            //user selected period is less then 10 days, period cycle past report is week
+            //console.log("Less than 10 days");
+            pastDate.setDate(pastDate.getDate() - 35);
+        }
     }
-    
     var yyyy = pastDate.getFullYear(); // Get the 4-digit year
     var mm = (pastDate.getMonth() + 1).toString().padStart(2, '0'); // Get the month (1-12) and format with a leading zero if necessary
     var dd = pastDate.getDate().toString().padStart(2, '0'); // Get the day of the month and format with a leading zero if necessary
