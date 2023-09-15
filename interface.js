@@ -1,6 +1,7 @@
 process.on('uncaughtException', function (err) {
     console.log(err);
 });
+
 //read connection parameters from .env file
 const path = require('path')
 require('dotenv').config({
@@ -28,7 +29,7 @@ const pool = new Pool({
     let timeSecond = 69999;
     let startDate = '2023-06-01';
     let endDate = '2023-07-01';
-    let flag = false;
+    let flag = true;
 
     //param passed to interface function
     const paramsObj = {
@@ -39,12 +40,13 @@ const pool = new Pool({
         endDate: toParams(endDate),
         dataTableName: data_table_name
     };
-    
 
+    let kpiValue;
+    
     const client = await pool.connect();
     // console.log("client on");
     try{  
-        const kpiId = toParams("machine_utilization_rate") ;
+        const kpiId = toParams("least_used_machine_id") ;
         const kpiRows = await client.query(kpiColumQuery(kpiId, kpi_table_name));
          // console.log(kpiColumQuery(kpiId, kpi_table_name));
          //console.log(kpiRows);
@@ -53,10 +55,14 @@ const pool = new Pool({
         if(kpiRows.rows[0]['children'] ===  null){
             //kpiRow[0].children = null => kpiRow[0].query => !null
             const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
-            //console.log(kpiRows.rows[0]['id'] +": "+retRow.rows[0]['v']);
+            kpiValue = retRow.rows[0]['v'];
+            console.log(kpiRows.rows[0]['id'] +" = "+ kpiValue);
         }else{
             //children is !null => query = null
             //console.log(kpiRows.rows[0]['children']);
+            /* the interface need to read which are the children, so it can ask for 
+            the value to use in the function aqcuired by read function
+            colum from kpi table */ 
             var  childArray = [];
             for(var child of kpiRows.rows[0]['children']){
                // console.log(child);
@@ -68,12 +74,12 @@ const pool = new Pool({
                 };
                 childArray.push(value);
             }
-            console.log(childArray);
-            // the interface need to read which are the children, so it can ask for 
-            //the value to use in the function aqcuired by read function
-            //colum from kpi table 
-            
-        }   
+            //console.log(childArray);
+            //console.log(kpiRows.rows[0]['js_fun']);
+            let operativeTime = Math.ceil(Math.abs(new Date(paramsObj.endDate)- new Date(paramsObj.startDate))/ (1000));
+            kpiValue = evalAndApplyFunction(kpiRows.rows[0]['js_fun'],childArray, operativeTime);
+            console.log(kpiRows.rows[0]['id']+" = "+kpiValue);
+        }//end else
     }catch(e){
         //print error code and detail
         console.error('Error:', e);
@@ -110,7 +116,7 @@ function toParams(str){
 
 //write the query to search into kpi table
 function kpiColumQuery (kpi_id, table_name){ 
-    return ('select id,query,children,function from '+table_name +" where id ="+ kpi_id);
+    return ('select * from '+table_name +" where id ="+ kpi_id);
 }
 
 //set the date to past 5 cycle period measuring difference with previuous period
@@ -148,4 +154,11 @@ function dateCalculator(date, [strD, endD], flag){
 
 }
 
+function evalAndApplyFunction(stringCode,params,operativeTime){
+    const dynamicFunction = new Function(stringCode);
+    const toApplay = dynamicFunction();
+    const result = toApplay(params,operativeTime);
+    //console.log("DEBUG: ", result);
+    return parseFloat(result.toFixed(2));
+}
 
