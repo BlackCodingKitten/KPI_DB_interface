@@ -28,7 +28,7 @@ const pool = new Pool({
     let timeSecond = 69999;
     let startDate = '2023-06-01';
     let endDate = '2023-07-01';
-    let flag = true;
+    let flag = false;
 
     //param passed to interface function
     const paramsObj = {
@@ -44,18 +44,16 @@ const pool = new Pool({
     const client = await pool.connect();
     // console.log("client on");
     try{  
-        const kpiId = toParams("machine_usage_trend") ;
+        const kpiId = toParams("machine_utilization_rate") ;
         const kpiRows = await client.query(kpiColumQuery(kpiId, kpi_table_name));
-        // console.log(kpiColumQuery(kpiId, kpi_table_name));
+         // console.log(kpiColumQuery(kpiId, kpi_table_name));
          //console.log(kpiRows);
 
         //check for children to understand if it's Primary KPI or Secondary KPI
         if(kpiRows.rows[0]['children'] ===  null){
             //kpiRow[0].children = null => kpiRow[0].query => !null
-
-
             const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
-            console.log(kpiRows.rows[0]['id'] +": "+retRow.rows[0]['v']);
+            //console.log(kpiRows.rows[0]['id'] +": "+retRow.rows[0]['v']);
         }else{
             //children is !null => query = null
             //console.log(kpiRows.rows[0]['children']);
