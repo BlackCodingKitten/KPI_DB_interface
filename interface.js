@@ -24,29 +24,35 @@ const pool = new Pool({
     port: process.env.PORT
 });
 
-(async() =>{
-    //dati che avdranno poi passati da input: 
-    let timeSecond = 69999;
-    let startDate = '2023-06-01';
-    let endDate = '2023-07-01';
-    let flag = true;
-
+/**
+ * Interface function to retrieve KPI (Key Performance Indicator) values based on specified parameters.
+ *
+ * @param {string} kpi - The identifier for the KPI to retrieve.
+ * @param {string} startDate - The start date for the KPI calculation period.
+ * @param {string} endDate - The end date for the KPI calculation period.
+ * @param {boolean} is5Period - A flag indicating whether to calculate for a 5-period cycle.
+ * @param {number} cost - The cost value to be used in calculations.
+ * @param {number} percentage - The percentage value to be used in calculations.
+ * @returns {Promise<number|null>} A promise that resolves to the calculated KPI value or null if an error occurs.
+ */
+ async function interfaceBody(kpi, startDate, endDate , is5Period, cost, percentage){
+  
     //param passed to interface function
     const paramsObj = {
-        timeSecond: timeSecond,
-        startDatePast: dateCalculator(startDate, [startDate,endDate], flag),
-        endDatePast:   toParams(startDate),
+        timeSecond: timeSecond(percentage, new Date(startDate), new Date(endDate)),
+        startDatePast: dateCalculator(startDate, [startDate,endDate], is5Period),
+        endDatePast:  toParams(startDate),
         startDate: toParams(startDate),
         endDate: toParams(endDate),
         dataTableName: data_table_name
     };
 
-    let kpiValue;
+    let kpiValue = null;
     
     const client = await pool.connect();
     // console.log("client on");
     try{  
-        const kpiId = toParams("least_used_machine_id") ;
+        const kpiId = toParams(kpi) ;
         const kpiRows = await client.query(kpiColumQuery(kpiId, kpi_table_name));
          // console.log(kpiColumQuery(kpiId, kpi_table_name));
          //console.log(kpiRows);
@@ -56,7 +62,7 @@ const pool = new Pool({
             //kpiRow[0].children = null => kpiRow[0].query => !null
             const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
             kpiValue = retRow.rows[0]['v'];
-            console.log(kpiRows.rows[0]['id'] +" = "+ kpiValue);
+            //console.log(kpiValue);
         }else{
             //children is !null => query = null
             //console.log(kpiRows.rows[0]['children']);
@@ -76,9 +82,10 @@ const pool = new Pool({
             }
             //console.log(childArray);
             //console.log(kpiRows.rows[0]['js_fun']);
-            let operativeTime = Math.ceil(Math.abs(new Date(paramsObj.endDate)- new Date(paramsObj.startDate))/ (1000));
-            kpiValue = evalAndApplyFunction(kpiRows.rows[0]['js_fun'],childArray, operativeTime);
-            console.log(kpiRows.rows[0]['id']+" = "+kpiValue);
+            
+            let operativeTime = Math.ceil(Math.abs(new Date(paramsObj.endDate)- new Date(paramsObj.startDate))/ (1000)); //seconds
+            kpiValue = evalAndApplyFunction(kpiRows.rows[0]['js_fun'],childArray, operativeTime, cost);
+            ///console.log(kpiValue);
         }//end else
     }catch(e){
         //print error code and detail
@@ -87,10 +94,35 @@ const pool = new Pool({
         //in each case release client
         client.release();
     }
+    return kpiValue;
+}
 
-})();
-
-//insert into query read from measured data database value into dollar regex
+/**
+ * Calculate the percentage of time (in seconds) between two dates.
+ *
+ * @param {number} p - The percentage you want to calculate.
+ * @param {Date} sD - The start date.
+ * @param {Date} eD - The end date.
+ * @returns {number} The calculated percentage of time in seconds.
+ */
+function timeSecond(p, sD, eD) {
+    // Calculate the absolute difference in milliseconds between the start and end dates
+    const millisecond = Math.abs(sD - eD);
+  
+    // Convert milliseconds to seconds and round to the nearest second
+    const second = Math.ceil(millisecond / 1000);
+  
+    // Calculate the percentage of time in seconds based on the provided percentage (p)
+    return (second * p) / 100;
+  }
+  
+/**
+ * Replace placeholders in the input string with corresponding values from the params object.
+ *
+ * @param {string} inputString - The input string containing placeholders in the format ${paramName}.
+ * @param {object} params - An object containing parameter names as keys and their corresponding values.
+ * @returns {string} The modified string with placeholders replaced by values.
+ */
 function replaceWithValue(inputString, params){
     // Use a regex to search for all matches in the format ${paramName}
     const regex = /\${(.*?)}/g;
@@ -109,17 +141,35 @@ function replaceWithValue(inputString, params){
 return outputString;
 }
 
-//trasform string into query params
+/**
+ * Wrap the input string with single quotes and return the resulting string.
+ *
+ * @param {string} str - The input string to be wrapped with single quotes.
+ * @returns {string} The input string enclosed in single quotes.
+ */
 function toParams(str){
     return ("'"+str+"'"); 
 }
 
-//write the query to search into kpi table
+/**
+ * Generate a SQL query to search for a specific record in a KPI table based on KPI ID and table name.
+ *
+ * @param {number} kpi_id - The KPI ID to search for in the table.
+ * @param {string} table_name - The name of the table where the search will be performed.
+ * @returns {string} A SQL query string to search for the specified KPI record in the given table.
+ */
 function kpiColumQuery (kpi_id, table_name){ 
     return ('select * from '+table_name +" where id ="+ kpi_id);
 }
 
-//set the date to past 5 cycle period measuring difference with previuous period
+/**
+ * Calculate a date in the past based on the specified period, measuring the difference with the previous period.
+ *
+ * @param {string} date - The reference date for the calculation.
+ * @param {string[]} [strD, endD] - An array representing the start and end dates of the selected period.
+ * @param {boolean} flag - A flag indicating whether to calculate for one past period (false) or five past periods (true).
+ * @returns {string} A formatted date string representing the calculated date in the past.
+ */
 function dateCalculator(date, [strD, endD], flag){
     const s = new Date(strD);
     const e = new Date(endD);
@@ -128,7 +178,7 @@ function dateCalculator(date, [strD, endD], flag){
     
     var pastDate = new Date (date);
     if(!flag){
-        //last period
+        //one past period
         pastDate.setDate(pastDate.getDate()-period);
     }else{
         //five past period
@@ -154,11 +204,34 @@ function dateCalculator(date, [strD, endD], flag){
 
 }
 
-function evalAndApplyFunction(stringCode,params,operativeTime){
+/**
+ * Execute a dynamically created function based on the provided string code, passing in parameters,
+ * operative time, and cost, and return the result rounded to two decimal places.
+ *
+ * @param {string} stringCode - The JavaScript code as a string that defines a function.
+ * @param {any} params - Parameters to be passed to the dynamically created function.
+ * @param {any} operativeTime - The operative time value to be passed to the dynamically created function.
+ * @param {number} cost - The cost value to be passed to the dynamically created function.
+ * @returns {number} The result of the executed function, rounded to two decimal places.
+ */
+function evalAndApplyFunction(stringCode,params,operativeTime,cost){
+    // Create a dynamic function from the provided stringCode using the Function constructor.
     const dynamicFunction = new Function(stringCode);
+     // Invoke the dynamic function to get a function to apply later
     const toApplay = dynamicFunction();
-    const result = toApplay(params,operativeTime);
+    // Call the obtained function with the provided params and operativeTime.
+    const result = toApplay(params,operativeTime,cost);
     //console.log("DEBUG: ", result);
+    // Round the result to two decimal places and parse it as a floating-point number.
     return parseFloat(result.toFixed(2));
 }
+
+
+
+async function interfaceMain(){
+    let kpi = "machine_usage_trend";
+    const toPrint = await interfaceBody(kpi,'2023-06-01','2023-07-01',true, 0.25,20);
+    console.log(kpi+": "+toPrint);
+
+}interfaceMain();
 
