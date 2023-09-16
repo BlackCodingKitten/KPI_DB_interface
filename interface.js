@@ -76,7 +76,7 @@ const pool = new Pool({
                 //console.log(replaceWithValue(childRetRow.rows[0]['query'], paramsObj));
                 var value ={
                     id: child,
-                    value: (await client.query(replaceWithValue(childRetRow.rows[0]['query'], paramsObj))).rows[0]['v']
+                    value: (await interfaceBody(child,startDate,endDate,is5Period,(cost*1000),percentage))
                 };
                 childArray.push(value);
             }
@@ -229,7 +229,7 @@ function evalAndApplyFunction(stringCode,params,operativeTime,cost){
 
 
 async function interfaceMain(){
-    let kpi = "machine_usage_trend";
+    let kpi = "estimate_tot_cost";
     const toPrint = await interfaceBody(kpi,'2023-06-01','2023-07-01',true, 0.25,20);
     console.log(kpi+": "+toPrint);
 
