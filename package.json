@@ -1,13 +1,14 @@
 {
   "name": "interface-script",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "type" : "module",
+  "description": " interface that opens a pool to forward queries to a PostgreSQL database, which returns the entire row for the corresponding indicator. Then, a check is performed on the query and children columns, which are mutually exclusive, and the corresponding operations are executed. KPIs that have a query are forwarded directly to the data DB, while KPIs that have children forward the query to calculate the children, which are then passed to the dynamically created function for calculating the indicator. The function in the form of a string is contained in the js-fun column.",
+  "main": "interface.mjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "author": "Michela Deodati",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.3.1",

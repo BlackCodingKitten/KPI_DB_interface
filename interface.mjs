@@ -3,26 +3,24 @@ process.on('uncaughtException', function (err) {
 });
 
 //read connection parameters from .env file
-const path = require('path')
-require('dotenv').config({
-    override: true,
-    path: path.join(__dirname,'development.env')
-});
-
-const {Client,Pool} = require ('pg');
+import { config } from 'dotenv';
+config({ path: 'development.env' });
+const databaseConfig = {
+    user: process.env.DB_USER,
+    host: process.env.HOST,
+    database: process.env.DATA,
+    password: process.env.PASSWORD,
+    port: process.env.PORT
+}
+import pg from "pg";
+const { Pool } = pg;
 
 //save table name 
 const kpi_table_name = process.env.KPI_TABLE_NAME;
 const data_table_name = process.env.DATA_TABLE_NAME;
 
 //create a pool with .env param
-const pool = new Pool({
-    user: process.env.USER,
-    host: process.env.HOST,
-    database: process.env.DATA,
-    password: process.env.PASSWORD,
-    port: process.env.PORT
-});
+const pool = new Pool(databaseConfig);
 
 /**
  * Interface function to retrieve KPI (Key Performance Indicator) values based on specified parameters.
@@ -30,17 +28,17 @@ const pool = new Pool({
  * @param {string} kpi - The identifier for the KPI to retrieve.
  * @param {string} startDate - The start date for the KPI calculation period.
  * @param {string} endDate - The end date for the KPI calculation period.
- * @param {boolean} is5Period - A flag indicating whether to calculate for a 5-period cycle.
+ * @param {boolean} howManyPeriod - A flag indicating whether to calculate for a 5-period cycle.
  * @param {number} cost - The cost value to be used in calculations.
  * @param {number} percentage - The percentage value to be used in calculations.
  * @returns {Promise<number|null>} A promise that resolves to the calculated KPI value or null if an error occurs.
  */
- async function interfaceBody(kpi, startDate, endDate , is5Period, cost, percentage){
+ async function interfaceBody(kpi, startDate, endDate , howManyPeriod, cost, percentage){
   
     //param passed to interface function
     const paramsObj = {
         timeSecond: timeSecond(percentage, new Date(startDate), new Date(endDate)),
-        startDatePast: dateCalculator(startDate, [startDate,endDate], is5Period),
+        startDatePast: dateCalculator(startDate, [startDate,endDate], howManyPeriod),
         endDatePast:  toParams(startDate),
         startDate: toParams(startDate),
         endDate: toParams(endDate),
@@ -76,7 +74,7 @@ const pool = new Pool({
                 //console.log(replaceWithValue(childRetRow.rows[0]['query'], paramsObj));
                 var value ={
                     id: child,
-                    value: (await interfaceBody(child,startDate,endDate,is5Period,(cost*1000),percentage))
+                    value: (await interfaceBody(child,startDate,endDate,howManyPeriod,(cost*1000),percentage))
                 };
                 childArray.push(value);
             }
@@ -170,38 +168,35 @@ function kpiColumQuery (kpi_id, table_name){
  * @param {boolean} flag - A flag indicating whether to calculate for one past period (false) or five past periods (true).
  * @returns {string} A formatted date string representing the calculated date in the past.
  */
-function dateCalculator(date, [strD, endD], flag){
+function dateCalculator(date, [strD, endD], howManyPeriod){
     const s = new Date(strD);
     const e = new Date(endD);
     //day subtraction is measured by milliseconds
     const period = Math.ceil(Math.abs(e-s)/ (1000*60*60*24)); 
     
     var pastDate = new Date (date);
-    if(!flag){
+    if(howManyPeriod === 1){
         //one past period
         pastDate.setDate(pastDate.getDate()-period);
     }else{
-        //five past period
+        //more than one past period
         if(period >= 10){
-            //user selected period is more than 10 days, period cycle past report is month
-            //console.log("More than 10 days");
-            //past 5 period evaluation 
-            pastDate.setMonth(pastDate.getMonth() - 5);
+            //user selected period is more than 10 days, period cycle past report is in month
+            pastDate.setMonth(pastDate.getMonth() - howManyPeriod);
         }else{
-            //user selected period is less then 10 days, period cycle past report is week
-            //console.log("Less than 10 days");
-            pastDate.setDate(pastDate.getDate() - 35);
+            //user selected period is less then 10 days, period cycle past report is in week
+            pastDate.setDate(pastDate.getDate() - (7*howManyPeriod));
         }
     }
-    var yyyy = pastDate.getFullYear(); // Get the 4-digit year
-    var mm = (pastDate.getMonth() + 1).toString().padStart(2, '0'); // Get the month (1-12) and format with a leading zero if necessary
-    var dd = pastDate.getDate().toString().padStart(2, '0'); // Get the day of the month and format with a leading zero if necessary
-    
-    var formattedDate = `${yyyy}-${mm}-${dd}`; // Create the formatted date string
-
-    //console.log("Input Date: "+date+" Output Date: "+toParams(formattedDate));
+    // Get the 4-digit year
+    var yyyy = pastDate.getFullYear(); 
+    // Get the month (1-12) and format with a leading zero if necessary
+    var mm = (pastDate.getMonth() + 1).toString().padStart(2, '0'); 
+     // Get the day of the month and format with a leading zero if necessary
+    var dd = pastDate.getDate().toString().padStart(2, '0');
+    // Create the formatted date string
+    var formattedDate = `${yyyy}-${mm}-${dd}`; 
     return toParams(formattedDate);
-
 }
 
 /**
@@ -227,11 +222,19 @@ function evalAndApplyFunction(stringCode,params,operativeTime,cost){
 }
 
 
-
-async function interfaceMain(){
-    let kpi = "estimate_tot_cost";
-    const toPrint = await interfaceBody(kpi,'2023-06-01','2023-07-01',true, 0.25,20);
-    console.log(kpi+": "+toPrint);
-
-}interfaceMain();
+/**
+ * Caller to Interface body function.
+ *
+ * @param {string} kpi - The identifier for the KPI to retrieve.
+ * @param {string} startDate - The start date for the KPI calculation period.
+ * @param {string} endDate - The end date for the KPI calculation period.
+ * @param {boolean} howManyPeriod - A value indicating how many past period to calculate. (ignored if it's not necessary);
+ * @param {number} cost - The cost value to be used in calculations.
+ * @param {number} percentage - The percentage value to be used in calculations.
+ * @returns {Promise<number|null>} A promise that resolves to the calculated KPI value or null if an error occurs.
+ */
+export default async function KPI_Table_Interface(kpi, startDate, endDate, pastPeriodAmount, cost_kWh, percentage){
+    const toReturn = await interfaceBody(kpi,'2023-06-01','2023-07-01',true, 0.25,20);
+    return toReturn;
+};
 
