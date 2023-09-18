@@ -21,7 +21,11 @@ const data_table_name = process.env.DATA_TABLE_NAME;
 
 //create a pool with .env param
 const pool = new Pool(databaseConfig);
-
+const defaultValue = {
+    percentage: 50,
+    cost : 0,
+    howManyPeriod : 1
+};
 /**
  * Interface function to retrieve KPI (Key Performance Indicator) values based on specified parameters.
  *
@@ -34,7 +38,16 @@ const pool = new Pool(databaseConfig);
  * @returns {Promise<number|null>} A promise that resolves to the calculated KPI value or null if an error occurs.
  */
  async function interfaceBody(kpi, startDate, endDate , howManyPeriod, cost, percentage){
-  
+
+    if (percentage === null){
+        percentage =defaultValue.percentage;
+    }
+    if(howManyPeriod === null){
+        howManyPeriod = defaultValue.howManyPeriod;
+    }
+    if(cost === null){
+        cost = defaultValue.cost;
+    }
     //param passed to interface function
     const paramsObj = {
         timeSecond: timeSecond(percentage, new Date(startDate), new Date(endDate)),
@@ -49,42 +62,55 @@ const pool = new Pool(databaseConfig);
     
     const client = await pool.connect();
     // console.log("client on");
-    try{  
-        const kpiId = toParams(kpi) ;
-        const kpiRows = await client.query(kpiColumQuery(kpiId, kpi_table_name));
-         // console.log(kpiColumQuery(kpiId, kpi_table_name));
-         //console.log(kpiRows);
-
-        //check for children to understand if it's Primary KPI or Secondary KPI
-        if(kpiRows.rows[0]['children'] ===  null){
-            //kpiRow[0].children = null => kpiRow[0].query => !null
-            const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
-            kpiValue = retRow.rows[0]['v'];
-            //console.log(kpiValue);
-        }else{
-            //children is !null => query = null
-            //console.log(kpiRows.rows[0]['children']);
-            /* the interface need to read which are the children, so it can ask for 
-            the value to use in the function aqcuired by read function
-            colum from kpi table */ 
-            var  childArray = [];
-            for(var child of kpiRows.rows[0]['children']){
-               // console.log(child);
-                const childRetRow = await client.query(kpiColumQuery(toParams(child),kpi_table_name));
-                //console.log(replaceWithValue(childRetRow.rows[0]['query'], paramsObj));
-                var value ={
-                    id: child,
-                    value: (await interfaceBody(child,startDate,endDate,howManyPeriod,(cost*1000),percentage))
+    try{
+        if(kpi==="documentation"){
+            const kpiTable = await client.query(kpiTableQuery(kpi_table_name));
+            var toPrint = [];
+            for( const KPI of kpiTable.rows){
+                const v ={
+                    id: KPI['id'],
+                    description:KPI['description']
                 };
-                childArray.push(value);
+                toPrint.push(v);
             }
-            //console.log(childArray);
-            //console.log(kpiRows.rows[0]['js_fun']);
-            
-            let operativeTime = Math.ceil(Math.abs(new Date(paramsObj.endDate)- new Date(paramsObj.startDate))/ (1000)); //seconds
-            kpiValue = evalAndApplyFunction(kpiRows.rows[0]['js_fun'],childArray, operativeTime, cost);
-            ///console.log(kpiValue);
-        }//end else
+            return toPrint;
+        }else{
+            const kpiId = toParams(kpi) ;
+            const kpiRows = await client.query(kpiColumQuery(kpiId, kpi_table_name));
+            // console.log(kpiColumQuery(kpiId, kpi_table_name));
+            //console.log(kpiRows);
+
+            //check for children to understand if it's Primary KPI or Secondary KPI
+            if(kpiRows.rows[0]['children'] ===  null){
+                //kpiRow[0].children = null => kpiRow[0].query => !null
+                const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
+                kpiValue = retRow.rows[0]['v'];
+                //console.log(kpiValue);
+            }else{
+                //children is !null => query = null
+                //console.log(kpiRows.rows[0]['children']);
+                /* the interface need to read which are the children, so it can ask for 
+                the value to use in the function aqcuired by read function
+                colum from kpi table */ 
+                var  childArray = [];
+                for(var child of kpiRows.rows[0]['children']){
+                // console.log(child);
+                    const childRetRow = await client.query(kpiColumQuery(toParams(child),kpi_table_name));
+                    //console.log(replaceWithValue(childRetRow.rows[0]['query'], paramsObj));
+                    var value ={
+                        id: child,
+                        value: (await interfaceBody(child,startDate,endDate,howManyPeriod,(cost*1000),percentage))
+                    };
+                    childArray.push(value);
+                }
+                //console.log(childArray);
+                //console.log(kpiRows.rows[0]['js_fun']);
+                
+                let operativeTime = Math.ceil(Math.abs(new Date(paramsObj.endDate)- new Date(paramsObj.startDate))/ (1000)); //seconds
+                kpiValue = evalAndApplyFunction(kpiRows.rows[0]['js_fun'],childArray, operativeTime, cost);
+                ///console.log(kpiValue);
+            }//end else
+        }
     }catch(e){
         //print error code and detail
         console.error('Error:', e);
@@ -93,6 +119,10 @@ const pool = new Pool(databaseConfig);
         client.release();
     }
     return kpiValue;
+}
+
+function kpiTableQuery(kpiTable){
+    return "select id,description from "+ kpiTable;
 }
 
 /**
