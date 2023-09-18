@@ -234,7 +234,10 @@ function evalAndApplyFunction(stringCode,params,operativeTime,cost){
  * @returns {Promise<number|null>} A promise that resolves to the calculated KPI value or null if an error occurs.
  */
 export default async function KPI_Table_Interface(kpi, startDate, endDate, pastPeriodAmount, cost_kWh, percentage){
-    const toReturn = await interfaceBody(kpi,'2023-06-01','2023-07-01',true, 0.25,20);
-    return toReturn;
+    const retunFromDB = await interfaceBody(kpi,startDate,endDate,pastPeriodAmount,cost_kWh,percentage);
+    pool.end()
+    return retunFromDB;
 };
+  
+
 
