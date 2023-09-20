@@ -90,11 +90,15 @@ const defaultValue = {
                 }
                 // kpiRow[0].query !== null
                 const retRow = await client.query(replaceWithValue(kpiRows.rows[0]['query'],paramsObj));
-                if(kpi.includes(table)){
+                if(kpi.includes('table')){
                     //if inside KPI id there is 'table' substring it menas the interface need to return an entire table:
                     var table = [];
-                    for (const r of kpiRows.rows){
-                        table.push(r['v']);
+                    for (const r of retRow.rows){
+                        const c={
+                            id: r['id'],
+                            value: r['v']
+                        };
+                        table.push(c);
                     }
                    return table;
                 }else{
