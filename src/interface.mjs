@@ -103,7 +103,7 @@ const defaultValue = {
                 //never reach
                 throw new Error("Ureachable codeLine.");
             }else{
-                //children is !null => query = null
+                //children is !null => query === null
                 /* the interface need to read which are the children, so it can ask for 
                 the value to use in the function aqcuired by read function
                 colum from kpi table */ 
@@ -252,7 +252,7 @@ function dateCalculator(date, [strD, endD], howManyPeriod){
  * @param {any} params - Parameters to be passed to the dynamically created function.
  * @param {any} operativeTime - The operative time value to be passed to the dynamically created function.
  * @param {number} cost - The cost value to be passed to the dynamically created function.
- * @returns {number} The result of the executed function, rounded to two decimal places.
+ * @returns {any} The result of the executed function, if float rounded to two decimal places.
  */
 function evalAndApplyFunction(stringCode,params,operativeTime,cost){
     // Create a dynamic function from the provided stringCode using the Function constructor.
